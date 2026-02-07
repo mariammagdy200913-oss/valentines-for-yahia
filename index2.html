@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Speed... I am Speed, Yahia!</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Arial', sans-serif; }
+        canvas { display: block; background: linear-gradient(#1e3c72, #2a5298); }
+        .ui { position: absolute; top: 20px; width: 100%; text-align: center; color: white; pointer-events: none; }
+        #replayBtn { 
+            display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+            padding: 15px 30px; font-size: 20px; background: #ff3366; color: white; border: none; 
+            border-radius: 50px; cursor: pointer; box-shadow: 0 5px #a31d40;
+        }
+        #replayBtn:active { transform: translate(-50%, -48%); box-shadow: 0 2px #a31d40; }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <h1 id="lvlTxt">Level 1: Radiator Springs</h1>
+        <h2 id="msg">Score: <span id="score">0</span> / 3</h2>
+    </div>
+    <button id="replayBtn" onclick="resetGame()">Try Again, Kachow!</button>
+    <canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const lvlTxt = document.getElementById("lvlTxt");
+const replayBtn = document.getElementById("replayBtn");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- Audio Engine (Generates sound without files!) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playJumpSound() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
+// --- Game State ---
+let currentLevel = 1;
+let score = 0;
+let gameActive = true;
+const gravity = 0.8;
+const player = { x: 50, y: 0, w: 70, h: 35, dy: 0, speed: 8, jump: -16, grounded: false };
+let keys = {};
+
+// --- Level Design ---
+const levels = {
+    1: { name: "Radiator Springs", color: "#d2b48c", goal: 3, plat: [{x:0, y:700, w:3000, h:200}, {x:400, y:550, w:200, h:20}, {x:700, y:400, w:200, h:20}] },
+    2: { name: "Thunder Hollow", color: "#556b2f", goal: 4, plat: [{x:0, y:700, w:3000, h:200}, {x:200, y:500, w:150, h:20}, {x:500, y:350, w:150, h:20}, {x:800, y:200, w:150, h:20}] },
+    3: { name: "Piston Cup", color: "#444", goal: 5, plat: [{x:0, y:700, w:3000, h:200}, {x:300, y:550, w:100, h:20}, {x:500, y:450, w:100, h:20}, {x:700, y:350, w:100, h:20}, {x:900, y:250, w:100, h:20}] },
+    4: { name: "Finish Line", color: "#800020", goal: 1, plat: [{x:0, y:700, w:3000, h:200}, {x:500, y:400, w:300, h:20}] }
+};
+
+let hearts = [];
+function spawnHearts() {
+    hearts = [];
+    for(let i=0; i<levels[currentLevel].goal; i++) {
+        hearts.push({x: 300 + (i*300), y: 300 + (Math.random()*200), collected: false});
+    }
+}
+spawnHearts();
+
+window.onkeydown = (e) => { keys[e.code] = true; if(audioCtx.state === 'suspended') audioCtx.resume(); };
+window.onkeyup = (e) => keys[e.code] = false;
+
+function drawMcQueen(x, y) {
+    // Car Body
+    ctx.fillStyle = "red";
+    ctx.fillRect(x, y, 70, 30);
+    ctx.fillStyle = "darkred";
+    ctx.fillRect(x + 10, y - 15, 40, 20); // Roof
+    // Lightning Bolt
+    ctx.fillStyle = "yellow";
+    ctx.beginPath();
+    ctx.moveTo(x+10, y+15); ctx.lineTo(x+40, y+5); ctx.lineTo(x+30, y+15); ctx.lineTo(x+50, y+25); ctx.fill();
+    // Wheels
+    ctx.fillStyle = "black";
+    ctx.beginPath(); ctx.arc(x+15, y+30, 8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+55, y+30, 8, 0, Math.PI*2); ctx.fill();
+}
+
+function update() {
+    if(!gameActive) return;
+
+    if(keys["ArrowRight"]) player.x += player.speed;
+    if(keys["ArrowLeft"]) player.x -= player.speed;
+    if((keys["Space"] || keys["ArrowUp"]) && player.grounded) { 
+        player.dy = player.jump; 
+        player.grounded = false; 
+        playJumpSound();
+    }
+
+    player.dy += gravity;
+    player.y += player.dy;
+
+    // Collision
+    player.grounded = false;
+    levels[currentLevel].plat.forEach(p => {
+        if(player.x < p.x + p.w && player.x + 70 > p.x && player.y + 35 > p.y && player.y + 35 < p.y + 30) {
+            player.grounded = true; player.dy = 0; player.y = p.y - 35;
+        }
+    });
+
+    // Draw
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    
+    // Draw Realistic Terrain Ground
+    ctx.fillStyle = levels[currentLevel].color;
+    levels[currentLevel].plat.forEach(p => {
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.fillStyle = "rgba(0,0,0,0.2)"; // Terrain texture shadow
+        for(let i=0; i<p.w; i+=40) ctx.fillRect(p.x+i, p.y, 2, p.h);
+        ctx.fillStyle = levels[currentLevel].color;
+    });
+
+    // Hearts
+    hearts.forEach((h, i) => {
+        if(!h.collected) {
+            ctx.font = "30px Arial";
+            ctx.fillText("❤️", h.x, h.y);
+            if(Math.abs(player.x - h.x) < 50 && Math.abs(player.y - h.y) < 50) {
+                h.collected = true; score++; 
+                scoreEl.innerText = score;
+            }
+        }
+    });
+
+    drawMcQueen(player.x, player.y);
+
+    // Level Logic
+    if(score >= levels[currentLevel].goal) {
+        if(currentLevel < 4) {
+            currentLevel++;
+            score = 0;
+            player.x = 50;
+            scoreEl.innerText = score;
+            lvlTxt.innerText = "Level " + currentLevel + ": " + levels[currentLevel].name;
+            spawnHearts();
+        } else {
+            gameActive = false;
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(0,0,canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 35px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("YOU WON MY HEART,", canvas.width/2, canvas.height/2 - 40);
+            ctx.fillText("HAPPY VALENTINES MY MARSHMALLOW", canvas.width/2, canvas.height/2 + 20);
+            replayBtn.style.display = "block";
+        }
+    }
+}
+
+function resetGame() {
+    currentLevel = 1; score = 0; player.x = 50; player.y = 0;
+    gameActive = true; replayBtn.style.display = "none";
+    lvlTxt.innerText = "Level 1: Radiator Springs";
+    scoreEl.innerText = "0";
+    spawnHearts();
+}
+
+setInterval(update, 1000/70);
+</script>
+</body>
+</html>
