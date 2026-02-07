@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Super Yahia World</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #5c94fa; font-family: 'Arial', sans-serif; }
+        #gameCanvas { display: block; background: linear-gradient(#5c94fa, #92a1fe); }
+        .ui { position: absolute; top: 10; left: 10; color: white; font-size: 24px; text-shadow: 2px 2px #000; }
+    </style>
+</head>
+<body>
+    <div class="ui">Hearts Collected: <span id="score">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- Game Settings ---
+const FPS = 70;
+const gravity = 0.8;
+let score = 0;
+
+// --- Player Object ---
+const player = {
+    x: 100, y: 400, w: 40, h: 40,
+    dx: 0, dy: 0,
+    speed: 6, jumpPower: -18,
+    grounded: false,
+    color: "#ff3366"
+};
+
+// --- World Objects ---
+const platforms = [
+    { x: 0, y: canvas.height - 50, w: canvas.width * 2, h: 50 }, // Ground
+    { x: 300, y: 450, w: 200, h: 20 },
+    { x: 600, y: 350, w: 200, h: 20 },
+    { x: 900, y: 250, w: 200, h: 20 }
+];
+
+const hearts = [
+    { x: 350, y: 400, collected: false },
+    { x: 650, y: 300, collected: false },
+    { x: 950, y: 200, collected: false }
+];
+
+// --- Input Handling ---
+const keys = {};
+window.addEventListener("keydown", e => keys[e.code] = true);
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+function drawHeart(x, y) {
+    ctx.fillStyle = "red";
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x, y - 10, x - 20, y - 10, x - 20, y);
+    ctx.bezierCurveTo(x - 20, y + 15, x, y + 25, x, y + 30);
+    ctx.bezierCurveTo(x, y + 25, x + 20, y + 15, x + 20, y);
+    ctx.bezierCurveTo(x + 20, y - 10, x, y - 10, x, y);
+    ctx.fill();
+}
+
+function update() {
+    // Left/Right Movement
+    if (keys["ArrowRight"]) player.dx = player.speed;
+    else if (keys["ArrowLeft"]) player.dx = -player.speed;
+    else player.dx = 0;
+
+    // Jumping
+    if (keys["Space"] && player.grounded) {
+        player.dy = player.jumpPower;
+        player.grounded = false;
+    }
+
+    // Apply Gravity
+    player.dy += gravity;
+    player.x += player.dx;
+    player.y += player.dy;
+
+    // Collision with Platforms
+    player.grounded = false;
+    platforms.forEach(p => {
+        if (player.x < p.x + p.w && player.x + player.w > p.x &&
+            player.y + player.h > p.y && player.y + player.h < p.y + p.h) {
+            player.grounded = true;
+            player.dy = 0;
+            player.y = p.y - player.h;
+        }
+    });
+
+    // Collect Hearts
+    hearts.forEach(h => {
+        if (!h.collected && Math.abs(player.x - h.x) < 40 && Math.abs(player.y - h.y) < 40) {
+            h.collected = true;
+            score++;
+            scoreEl.innerText = score;
+        }
+    });
+
+    // Drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw Platforms
+    ctx.fillStyle = "#8B4513";
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+
+    // Draw Hearts
+    hearts.forEach(h => { if(!h.collected) drawHeart(h.x, h.y); });
+
+    // Draw Yahia (The Player)
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.fillStyle = "white";
+    ctx.fillText("YAHIA", player.x - 5, player.y - 10);
+
+    // Win Message
+    if (score === 3) {
+        ctx.font = "50px Arial";
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.fillText("I LOVE YOU YAHIA!", canvas.width/2, canvas.height/2);
+    }
+}
+
+// Set Framerate to 70
+setInterval(update, 1000 / 70);
+</script>
+</body>
+</html>
